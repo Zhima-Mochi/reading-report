@@ -1,0 +1,398 @@
+% =====================================================
+%  Architecture & DDD — Full Slide Deck
+% =====================================================
+\documentclass[UTF8]{beamer}
+\usetheme{Madrid}
+
+% ----------- 套件 ----------
+\usepackage{fontspec}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\hypersetup{colorlinks,linkcolor=black,urlcolor=blue}
+
+\PassOptionsToPackage{quiet}{xeCJK}
+\usepackage{ctex}
+\setCJKmainfont{Noto Sans CJK TC}
+\setCJKsansfont{Noto Sans CJK TC}
+\setCJKmonofont{Noto Sans Mono CJK TC}
+
+% ----------- 版面 ----------
+
+\AtBeginSection[]{
+  \begin{frame}
+    \vfill
+    \begin{center}
+        \usebeamercolor{title}
+        {\Huge \insertsection}
+    \end{center}
+    \vfill
+  \end{frame}
+}
+
+
+% ----------- 程式碼顯示 ----------
+\lstset{
+  language=Java,
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\bfseries\color{blue},
+  commentstyle=\itshape\color{gray},
+  stringstyle=\color{purple},
+  numbers=left, numberstyle=\tiny\color{gray}, numbersep=5pt,
+  breaklines=true, showstringspaces=false,
+  columns=flexible, tabsize=2,
+  frame=single, framerule=0pt,
+  backgroundcolor=\color{gray!6}
+}
+
+% ----------- 專案資訊 ----------
+\title[第四章 · Architecture 與 DDD]{第四章：Architecture \\ 架構風格與 DDD 的協奏曲}
+\date{\today}
+
+% ======================================================
+\begin{document}
+% ------------------------------------------------------
+\begin{frame}
+    \titlepage
+\end{frame}
+
+% ------------------------------------------------------
+\begin{frame}{目錄}
+    \scriptsize
+    \tableofcontents[hideallsubsections]
+\end{frame}
+
+
+% ================== Section: 引言 =====================
+\section{開場}
+\begin{frame}{開場引言}
+    \begin{quote}
+        \Large ''Architecture should speak of its time and place,\\
+        but yearn for timelessness.'' \\
+        \small - \textit{Frank Gehry}
+    \end{quote}
+\end{frame}
+
+\begin{frame}{核心觀點}
+    \begin{itemize}
+        \item DDD 是一套以 \textbf{Bounded Context} 劃界的思維框架，而非單一實作架構。
+        \item 架構 = \textbf{品質屬性 + 功能需求} 的平衡藝術。
+        \item 架構應服務於 Domain 模型；勿讓技術層凌駕業務語言。
+        \item 追求可演進，抵禦未知需求，才能保持系統韌性。
+    \end{itemize}
+\end{frame}
+
+% ================== Section: SaaSOvation =====================
+\section{SaaSOvation 演進地圖}
+\begin{frame}{SaaSOvation 架構演進}
+    \scriptsize
+    \begin{tabular}{|c|c|c|c|c|}
+        \hline
+        階段       & 架構               & 驅動     & 收穫       & 風險     \\ \hline\hline
+        Startup    & Monolith (Layered) & MVP 速度 & 快速迭代   & 技術債   \\ \hline
+        Scale-up   & Hexagonal + CQRS   & 可測試性 & 關注點分離 & 邊界模糊 \\ \hline
+        Enterprise & 多 Context + SOA   & 團隊協作 & 去耦       & 協調成本 \\ \hline
+    \end{tabular}
+    \vspace{0.3cm}
+    \begin{block}{啟示}
+        沒有一步到位的架構：\bfseries{需求 × 風險 × 演進式重構} 才是真正的長青之道。
+    \end{block}
+\end{frame}
+
+% ================== Section: Layered =====================
+\section{Layered Architecture}
+\begin{frame}{Layered 四層模型}
+    \begin{itemize}
+        \item UI → Application → Domain → Infrastructure
+        \item 優點：結構清晰、好上手
+        \item 缺陷：若缺乏 DDD 思維，易淪為 "Controller + Service + DAO" 技術債
+        \item 解方：\textbf{DIP + Ports/Adapters}、在層內劃分 Bounded Context
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Layered Java (DIP)}
+    \tiny
+    \begin{lstlisting}
+// Domain Layer (Port)
+public interface OrderRepository {
+    Order findById(String id);
+    void save(Order order);
+}
+
+public class Order {
+    private final String id;
+    private OrderStatus status = OrderStatus.CREATED;
+    public Order(String id) { this.id = id; }
+    public void complete() { status = OrderStatus.COMPLETED; }
+    public OrderStatus status() { return status; }
+}
+
+// Application Layer
+public class OrderService {
+    private final OrderRepository repo; // 依賴抽象
+    public OrderService(OrderRepository repo) { this.repo = repo; }
+    public void completeOrder(String id) {
+        Order o = repo.findById(id);
+        o.complete(); repo.save(o);
+    }
+}
+\end{lstlisting}
+\end{frame}
+
+% ================== Section: Hexagonal =====================
+\section{Hexagonal Architecture}
+\begin{frame}{Hexagonal 重點}
+    \begin{enumerate}
+        \item 所有依賴指向 Domain；外界透過 Port 呼叫
+        \item Adapter 隔離協定／格式，方便測試替身
+        \item 高可維護、技術棧可替換
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}[fragile]{Hexagonal Java 範例}
+    \begin{lstlisting}
+// Port
+public interface PaymentPort {
+    boolean pay(double amount);
+}
+
+// Domain
+public class Checkout {
+    private final PaymentPort port;
+    public Checkout(PaymentPort port) { this.port = port; }
+    public Receipt process(double amt) {
+        if (port.pay(amt)) return new Receipt("OK");
+        throw new PaymentFailed();
+    }
+}
+
+// Adapter
+public class PaypalAdapter implements PaymentPort {
+    private final PaypalApi api;
+    public PaypalAdapter(PaypalApi api) { this.api = api; }
+    public boolean pay(double amt) { return api.execute(amt); }
+}
+\end{lstlisting}
+\end{frame}
+
+% ================== Section: SOA =====================
+\section{SOA Architecture}
+\begin{frame}{SOA 架構精要}
+    \begin{itemize}
+        \item 每個 Bounded Context → 獨立服務 (Service)
+        \item 通訊：REST / gRPC (同步)，Event Bus (非同步)
+        \item 服務治理：Registry、Contract-First、Versioning、Policy Enforcement
+        \item 韌性：Circuit Breaker、Retry、Bulkhead、Timeout
+    \end{itemize}
+\end{frame}
+
+% ================== Section: REST =====================
+\section{REST Architecture}
+\begin{frame}[fragile]{Contract-First Design 範例}
+    \begin{lstlisting}[language=Java]
+@Path("/products")
+public interface ProductService {
+    @GET @Path("/{id}")
+    ProductDTO get(@PathParam("id") String id);
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}{REST 架構風格}
+    \begin{itemize}
+        \item 資源導向，使用 HTTP 動詞 (GET/POST/PUT/DELETE)
+        \item 無狀態、統一介面、可快取、分層系統
+        \item HATEOAS：在回應中提供 Link 進行導覽
+        \item Aggregate ↔️ Resource，API 不可破壞 Context 邊界
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{REST Java 範例}
+    \begin{lstlisting}[language=Java]
+@RestController
+@RequestMapping("/orders")
+class OrderController {
+    private final OrderService svc;
+    OrderController(OrderService svc) { this.svc = svc; }
+
+    @GetMapping("/{id}")
+    RepresentationModel<OrderDTO> get(@PathVariable String id) {
+        Order o = svc.findById(id);
+        OrderDTO dto = new OrderDTO(o.status().name());
+        dto.add(linkTo(methodOn(OrderController.class).get(id)).withSelfRel());
+        return dto;
+    }
+}
+\end{lstlisting}
+\end{frame}
+
+% ================== Section: CQRS =====================
+\section{CQRS Pattern}
+\begin{frame}{CQRS 核心概念}
+    \begin{itemize}
+        \item Command / Query 分離；寫入模型 ≠ 讀取模型
+        \item 為寫入一致性與讀取效能分別優化
+        \item 常與 Event Sourcing 搭配；需要處理最終一致性
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{CQRS Java - Command Side}
+    \begin{lstlisting}[language=Java]
+public record CreateUserCommand(String id, String name) {}
+
+public class UserCommandHandler {
+    private final UserRepository repo;
+    public UserCommandHandler(UserRepository repo) { this.repo = repo; }
+    public void handle(CreateUserCommand cmd) {
+        repo.save(new User(cmd.id(), cmd.name()));
+    }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{CQRS Java - Query Side}
+    \begin{lstlisting}[language=Java]
+public class UserProjection {
+    @EventListener
+    public void on(UserCreated e) {
+        // 寫入投影 DB
+    }
+}
+
+public class UserQueryService {
+    private final UserReadRepo repo;
+    public UserQueryService(UserReadRepo r) { this.repo = r; }
+    public UserDTO fetch(String id) { return repo.find(id); }
+}
+\end{lstlisting}
+\end{frame}
+
+% ================== Section: Event-Driven =====================
+\section{Event-Driven Styles}
+\begin{frame}{事件驅動三風格}
+    \begin{enumerate}
+        \item Pipes \& Filters — 流式轉換
+        \item Sagas — 分散式交易協調 + 補償
+        \item Event Sourcing — 狀態 = 事件折疊
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}[fragile]{Saga 編排範例}
+    \begin{lstlisting}[language=Java]
+class ShippingSaga {
+    @SagaEventHandler
+    void on(OrderCreated e) {
+        send(new ReserveInventory(e.id()));
+    }
+    @SagaEventHandler
+    void on(InventoryReserved e) {
+        send(new ArrangeShipment(e.orderId()));
+    }
+    @SagaEventHandler
+    void on(ShipmentArranged e) {
+        send(new MarkOrderShipped(e.orderId()));
+        end();
+    }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{Event Sourcing 範例}
+    \begin{lstlisting}[language=Java]
+public interface DomainEvent { Instant occurredAt(); }
+
+public record OrderCreated(String id, Instant occurredAt) implements DomainEvent {}
+
+public class OrderAggregate {
+    private String id;
+    private OrderStatus status;
+
+    public static OrderAggregate reconstitute(List<DomainEvent> history) {
+        OrderAggregate agg = new OrderAggregate();
+        history.forEach(agg::apply);
+        return agg;
+    }
+    private void apply(DomainEvent e) {
+        if (e instanceof OrderCreated oc) {
+            this.id = oc.id();
+            this.status = OrderStatus.CREATED;
+        }
+    }
+}
+\end{lstlisting}
+\end{frame}
+
+% ================== Section: Data Fabric =====================
+\section{Data Fabric}
+\begin{frame}{Data Fabric 架構要點}
+    \begin{itemize}
+        \item 統一資料平面：整合 OLTP / OLAP / Streams / Cache
+        \item Smart Cache、Federated Query、Consistency Policy、Observability
+        \item 與 DDD 聚合分片結合，確保資料局部性與效能
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Hazelcast 快取範例}
+    \begin{lstlisting}[language=Java]
+Config cfg = new Config();
+HazelcastInstance hz = Hazelcast.newHazelcastInstance(cfg);
+IMap<String, OrderSummary> orders = hz.getMap("orders");
+
+OrderSummary summary = new OrderSummary("ID-123", 1023, Instant.now());
+orders.set(summary.id(), summary, 30, TimeUnit.MINUTES);
+
+Collection<OrderSummary> highValue = orders.values(
+    Predicates.greaterThan("total", 1000));
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{Apache Ignite 分散運算範例}
+    \begin{lstlisting}[language=Java]
+Ignition.start();
+Ignite ignite = Ignition.ignite();
+IgniteCache<Integer, Tick> cache = ignite.getOrCreateCache("ticks");
+
+IgniteCallable<Double> task = () -> {
+    List<List<?>> rows = cache.query(
+      new SqlFieldsQuery("SELECT price FROM Tick WHERE pid = ?")
+        .setArgs(portfolioId)).getAll();
+    List<Double> prices = rows.stream()
+        .map(r -> (Double) r.get(0))
+        .sorted()
+        .collect(Collectors.toList());
+    return prices.get((int)(prices.size() * 0.05)); // Value-at-Risk
+};
+
+Double var = ignite.compute().call(task);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}{Data Fabric 風險與治理建議}
+    \begin{itemize}
+        \item \textbf{記憶體壓力}：熱資料量估錯 → OOM，建議 TTL + LRU Eviction
+        \item \textbf{Schema 演進}：需有 Registry + 相容性驗證
+        \item \textbf{Split-Brain}：多區部署需啟用 CP 模式或資料同步機制
+        \item \textbf{安全}：敏感資料須加密（靜態/傳輸/使用中）與審計紀錄
+    \end{itemize}
+\end{frame}
+
+% ================== 結語 =====================
+\section{結語}
+\begin{frame}{結語：架構即演進}
+    \begin{itemize}
+        \item 沒有銀彈架構，DDD 幫助你因應變化、協作清晰
+        \item 每種架構風格皆服務於 Domain 模型的演進
+        \item 避免技術導向的「錯配式設計」；堅持語言一致性與 Context 純度
+        \item 架構設計的重點不是「選哪一種」，而是「如何隨著需求演進」
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[plain,noframenumbering]
+    \centering
+    \Huge \textbf{謝謝收看！} \\
+    \vspace{1cm}
+    \normalsize Slides by
+\end{frame}
+
+\end{document}
