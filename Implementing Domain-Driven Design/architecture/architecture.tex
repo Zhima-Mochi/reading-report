@@ -18,6 +18,11 @@
 \setCJKsansfont{Noto Sans CJK TC}
 \setCJKmonofont{Noto Sans Mono CJK TC}
 
+\usepackage{pgfpages}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\setbeameroption{show notes}
+
 % ----------- 版面 ----------
 
 \AtBeginSection[]{
@@ -48,7 +53,7 @@
 
 % ----------- 專案資訊 ----------
 \title[第四章 · Architecture 與 DDD]{第四章：Architecture \\ 架構風格與 DDD 的協奏曲}
-\date{\today}
+\date{}
 
 % ======================================================
 \begin{document}
@@ -68,8 +73,8 @@
 \section{開場}
 \begin{frame}{開場引言}
     \begin{quote}
-        \Large ''Architecture should speak of its time and place,\\
-        but yearn for timelessness.'' \\
+        \Large "Architecture should speak of its time and place,\\
+        but yearn for timelessness."
         \small - \textit{Frank Gehry}
     \end{quote}
 \end{frame}
@@ -102,78 +107,164 @@
 
 % ================== Section: Layered =====================
 \section{Layered Architecture}
-\begin{frame}{Layered 四層模型}
+\begin{frame}{傳統分層架構 (Traditional Layers)}
     \begin{itemize}
-        \item UI → Application → Domain → Infrastructure
+        \item 傳統分層架構：UI → Application → Domain → Infrastructure
+        \item 每層只能依賴自己和下層
         \item 優點：結構清晰、好上手
-        \item 缺陷：若缺乏 DDD 思維，易淪為 "Controller + Service + DAO" 技術債
-        \item 解方：\textbf{DIP + Ports/Adapters}、在層內劃分 Bounded Context
+        \item 問題：Repository 介面在 Domain，實作在 Infrastructure
+        \item 缺陷：違反層級規則、難以測試、技術層凌駕業務層
     \end{itemize}
+    \begin{center}
+        \includegraphics[width=0.3\textwidth]{img/layered-basic.png}
+    \end{center}
+\end{frame}
+
+\begin{frame}{依賴反轉原則 (DIP)}
+    \begin{itemize}
+        \item 高階模組不應依賴低階模組，兩者都應依賴抽象
+        \item 抽象不應依賴細節，細節應依賴抽象
+        \item 解決方案：引入 DIP
+        \item 邏輯上將 Infrastructure 層「移至上層」
+        \item 實際上是讓 Infrastructure 實作 Domain 定義的介面
+    \end{itemize}
+\end{frame}
+\begin{frame}[fragile]{Layered Java (DIP)}
+    \tiny
+    \begin{lstlisting}
+@Transactional
+public void commitBacklogItemToSprint(
+    String aTenantId, String aBacklogItemId, String aSprintId) {
+    TenantId tenantId = new TenantId(aTenantId);
+    BacklogItem backlogItem =
+        backlogItemRepository.backlogItemOfId(
+            tenantId, new BacklogItemId(aBacklogItemId));
+    Sprint sprint = sprintRepository.sprintOfId(
+        tenantId, new SprintId(aSprintId));
+    backlogItem.commitTo(sprint);
+}
+\end{lstlisting}
 \end{frame}
 
 \begin{frame}[fragile]{Layered Java (DIP)}
     \tiny
     \begin{lstlisting}
-// Domain Layer (Port)
-public interface OrderRepository {
-    Order findById(String id);
-    void save(Order order);
+package
+com.saasovation.agilepm.infrastructure.persistence;
+import com.saasovation.agilepm.domain.model.product.*;
+public class HibernateBacklogItemRepository
+implements BacklogItemRepository {
+...
+@Override
+@SuppressWarnings("unchecked")
+public Collection<BacklogItem>
+allBacklogItemsComittedTo(
+Tenant aTenant, SprintId aSprintId) {
+Query query =
+this.session().createQuery(
+"from -BacklogItem as _obj_ "
++ "where _obj_.tenant = ? and
+_obj_.sprintId = ?");
+query.setParameter(0, aTenant);
+query.setParameter(1, aSprintId);
+return (Collection<BacklogItem>) query.list();
 }
-
-public class Order {
-    private final String id;
-    private OrderStatus status = OrderStatus.CREATED;
-    public Order(String id) { this.id = id; }
-    public void complete() { status = OrderStatus.COMPLETED; }
-    public OrderStatus status() { return status; }
-}
-
-// Application Layer
-public class OrderService {
-    private final OrderRepository repo; // 依賴抽象
-    public OrderService(OrderRepository repo) { this.repo = repo; }
-    public void completeOrder(String id) {
-        Order o = repo.findById(id);
-        o.complete(); repo.save(o);
-    }
+...
 }
 \end{lstlisting}
+\end{frame}
+
+\begin{frame}{DIP：分層的變革}
+    \begin{itemize}
+        \item 傳統分層架構是「高階元件依賴低階元件」
+        \item DIP 顛倒依賴方向：Domain 定義介面，Infrastructure 實作
+        \item Infrastructure 被「邏輯上」放在最上層
+        \item 它是「實作者」，不是「控制者」
+        \item 符合 DDD 精神：Domain 是中心，技術在外圍服務它
+    \end{itemize}
+    \begin{center}
+        \includegraphics[width=0.3\textwidth]{img/infra-calls-domain.png}
+    \end{center}
 \end{frame}
 
 % ================== Section: Hexagonal =====================
 \section{Hexagonal Architecture}
-\begin{frame}{Hexagonal 重點}
+\begin{frame}{Hexagonal 架構三大核心}
     \begin{enumerate}
-        \item 所有依賴指向 Domain；外界透過 Port 呼叫
-        \item Adapter 隔離協定／格式，方便測試替身
-        \item 高可維護、技術棧可替換
+        \item 所有依賴都「向內」指向應用核心（Domain + Use Cases）
+        \item 對外協定由 Adapter 處理（如 HTTP、AMQP、JDBC）
+        \item Application Service 對 Port 發出請求，由 Adapter 實作
     \end{enumerate}
+    \vspace{0.5em}
+    \textbf{→ 避免耦合框架，實現技術可替換性、測試友善性、邊界清晰性}
+    \begin{center}
+        \includegraphics[width=0.5\textwidth]{img/hexagonal-architecture.png}
+    \end{center}
 \end{frame}
 
-\begin{frame}[fragile]{Hexagonal Java 範例}
-    \begin{lstlisting}
-// Port
-public interface PaymentPort {
-    boolean pay(double amount);
-}
-
-// Domain
-public class Checkout {
-    private final PaymentPort port;
-    public Checkout(PaymentPort port) { this.port = port; }
-    public Receipt process(double amt) {
-        if (port.pay(amt)) return new Receipt("OK");
-        throw new PaymentFailed();
+\begin{frame}[fragile]{Hexagonal 架構 Input Port Java 範例}
+    \scriptsize
+    \begin{lstlisting}[language=Java]
+// === Input Adapter ===
+@Path("/tenants/{tenantId}/products") // 接收 HTTP 請求，是 Input Adapter
+public class ProductResource extends Resource {
+    // === Port ===
+    private ProductService productService; // 這是 Input Port（介面）
+    @GET
+    @Path("{productId}")
+    @Produces({"application/vnd.saasovation.projectovation+xml"})
+    public Product getProduct(
+        @PathParam("tenantId") String aTenantId,
+        @PathParam("productId") String aProductId,
+        @Context Request aRequest) {
+        // 呼叫 Port 的方法，將外部資料導入應用層（Port 實作中會使用 Domain Model）
+        Product product = productService.product(aTenantId, aProductId);
+        if (product == null) {
+            throw new WebApplicationException(Response.Status.NOT_FOUND);
+        }
+        // 回傳的是 Domain 物件，由 Output Adapter（MessageBodyWriter）序列化為 XML
+        return product;
     }
 }
-
-// Adapter
-public class PaypalAdapter implements PaymentPort {
-    private final PaypalApi api;
-    public PaypalAdapter(PaypalApi api) { this.api = api; }
-    public boolean pay(double amt) { return api.execute(amt); }
-}
 \end{lstlisting}
+\end{frame}
+
+\begin{frame}[shrink=20]{Hexagonal 架構的 Port 與 Adapter}
+    \begin{center}
+        \textit{依賴方向皆由外往內，所有 Adapter 實作 Port，所有 Port 為內部定義}
+    \end{center}
+    \begin{center}
+        \begin{tikzpicture}[node distance=1.2cm, every node/.style={align=center}]
+            % 上方輸入流
+            \node (uiAdapter) [draw, rectangle] {ProductResource\\(Input Adapter)};
+            \node (http) [below=of uiAdapter, draw, rectangle] {HTTP / JAX-RS\\(技術協定)};
+            \node (port) [below=of http, draw, rectangle] {ProductService\\(Input Port)};
+            \node (app) [below=of port, draw, rectangle] {ProductApplicationService\\(Use Case 實作)};
+
+            % 下方輸出流
+            \node (repoPort) [below=of app, draw, rectangle] {ProductRepository\\(Output Port)};
+            \node (repoImpl) [below left=1cm and 0.5cm of repoPort, draw, rectangle] {MySQLRepository\\(Output Adapter)};
+            \node (msgAdapter) [below right=1cm and 0.5cm of repoPort, draw, rectangle] {MessageBodyWriter\\(Output Adapter)};
+
+            % arrows
+            \draw[->] (uiAdapter) -- node[right] {轉接協定} (http);
+            \draw[->] (http) -- node[right] {呼叫 Port} (port);
+            \draw[->] (port) -- node[right] {由 Use Case 實作} (app);
+            \draw[->] (app) -- node[right] {依賴} (repoPort);
+            \draw[->] (repoImpl) -- node[left] {實作} (repoPort);
+            \draw[->] (msgAdapter) -- node[right] {輸出格式} (repoPort);
+        \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+
+\begin{frame}{Hexagonal 架構的 DDD 價值}
+    \begin{itemize}
+        \item 隔離技術細節，讓核心 Domain 不依賴外部框架
+        \item 測試容易：可以在無 UI / 無 DB 下進行完整測試
+        \item 高擴充性：新增一種協定只需新增對應 Adapter
+        \item 是實踐 DDD 的最佳部署架構之一
+    \end{itemize}
 \end{frame}
 
 % ================== Section: SOA =====================
@@ -181,34 +272,70 @@ public class PaypalAdapter implements PaymentPort {
 \begin{frame}{SOA 架構精要}
     \begin{itemize}
         \item 每個 Bounded Context → 獨立服務 (Service)
-        \item 通訊：REST / gRPC (同步)，Event Bus (非同步)
-        \item 服務治理：Registry、Contract-First、Versioning、Policy Enforcement
-        \item 韌性：Circuit Breaker、Retry、Bulkhead、Timeout
+        \item 技術介面可為 REST / SOAP / Messaging
+        \item 不同技術服務可共享同一語意邊界（如一組 REST + Queue 為一 BC 的對外服務）
+        \item 一個業務服務 = 多個技術服務 + 多個 Bounded Context
+        \item 治理與韌性：Registry、Contract-First、Versioning、Circuit Breaker、Retry 等
     \end{itemize}
 \end{frame}
+
+\begin{frame}{Hexagonal Architecture supporting SOA, with REST, SOAP, and messaging services}
+    \begin{center}
+        \includegraphics[width=0.7\textwidth]{img/hexagonal-tservice.png}
+    \end{center}
+\end{frame}
+
 
 % ================== Section: REST =====================
-\section{REST Architecture}
-\begin{frame}[fragile]{Contract-First Design 範例}
-    \begin{lstlisting}[language=Java]
-@Path("/products")
-public interface ProductService {
-    @GET @Path("/{id}")
-    ProductDTO get(@PathParam("id") String id);
-}
-\end{lstlisting}
-\end{frame}
+\section{REST architectural style}
 
-\begin{frame}{REST 架構風格}
+\begin{frame}{Contract-First Design}
     \begin{itemize}
-        \item 資源導向，使用 HTTP 動詞 (GET/POST/PUT/DELETE)
-        \item 無狀態、統一介面、可快取、分層系統
-        \item HATEOAS：在回應中提供 Link 進行導覽
-        \item Aggregate ↔️ Resource，API 不可破壞 Context 邊界
+        \item 先編寫明確的介面定義（「合約」），再實作服務程式碼
+        \item 合約成為單一事實來源：
+        \begin{itemize}
+            \item \textbf{Provider}：依照合約生成或手寫服務端程式碼
+            \item \textbf{Consumer}：生成存根/SDK 或用於驗證與模擬
+            \item \textbf{Governance}：版本控制、相容性檢查、策略執行、文件
+        \end{itemize}
     \end{itemize}
+    \tiny
+    \begin{center}
+        \begin{tabular}{|l|l|l|}
+            \hline
+            \textbf{協定} & \textbf{合約格式} & \textbf{程式碼生成工具} \\
+            \hline
+            REST/HTTP & OpenAPI 3 / AsyncAPI & Swagger Codegen, openapi-generator \\
+            \hline
+            gRPC & Protocol Buffers (.proto) & protoc, Buf, Grpc-Tools \\
+            \hline
+            SOAP & WSDL + XSD & wsimport, wsdl2java \\
+            \hline
+            Events & Avro Schema, AsyncAPI & avro-tools, Karate, Springs Cloud Stream \\
+            \hline
+        \end{tabular}
+    \end{center}
 \end{frame}
 
-\begin{frame}[fragile]{REST Java 範例}
+\begin{frame}{為何選擇 Contract-First？}
+    \begin{center}
+        \begin{tabular}{|p{0.45\textwidth}|p{0.45\textwidth}|}
+            \hline
+            \textbf{Code-First（實作優先）} & \textbf{Contract-First（合約優先）} \\
+            \hline
+            API 常模仿內部類別結構；後續重構會破壞客戶端 & API 專為外部需求設計；與內部模型解耦 \\
+            \hline
+            客戶端團隊需等待服務端存根或模擬服務 & 合約早期發布 → 客戶端和服務端可並行工作 \\
+            \hline
+            更難追蹤破壞性變更 & 可比較合約差異，執行語義版本檢查 \\
+            \hline
+            較少保證；文件容易過時 & 程式碼、測試、文件、模擬都從單一來源生成 \\
+            \hline
+        \end{tabular}
+    \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{REST Java 實踐範例}
     \begin{lstlisting}[language=Java]
 @RestController
 @RequestMapping("/orders")
@@ -224,21 +351,26 @@ class OrderController {
         return dto;
     }
 }
-\end{lstlisting}
+    \end{lstlisting}
 \end{frame}
+
+
 
 % ================== Section: CQRS =====================
 \section{CQRS Pattern}
 \begin{frame}{CQRS 核心概念}
-    \begin{itemize}
-        \item Command / Query 分離；寫入模型 ≠ 讀取模型
-        \item 為寫入一致性與讀取效能分別優化
-        \item 常與 Event Sourcing 搭配；需要處理最終一致性
-    \end{itemize}
+  \begin{itemize}
+    \item Command ↔ Query 完全分離；寫入模型 (Write Model) 不直接用於查詢
+    \item 寫入優先強一致；讀取可為最終一致並為效能/報表優化
+    \item 常配 Event Sourcing；需要處理同步/異步投影更新
+  \end{itemize}
+  \begin{center}
+    \includegraphics[width=0.9\textwidth]{img/cqrs-diagram.png}
+  \end{center}
 \end{frame}
 
-\begin{frame}[fragile]{CQRS Java - Command Side}
-    \begin{lstlisting}[language=Java]
+\begin{frame}[fragile]{CQRS Java — Command Side}
+\begin{lstlisting}[language=Java]
 public record CreateUserCommand(String id, String name) {}
 
 public class UserCommandHandler {
@@ -251,12 +383,12 @@ public class UserCommandHandler {
 \end{lstlisting}
 \end{frame}
 
-\begin{frame}[fragile]{CQRS Java - Query Side}
-    \begin{lstlisting}[language=Java]
+\begin{frame}[fragile]{CQRS Java — Query Side}
+\begin{lstlisting}[language=Java]
 public class UserProjection {
     @EventListener
     public void on(UserCreated e) {
-        // 寫入投影 DB
+        // 更新 Read Model (denormalized DB)
     }
 }
 
@@ -268,18 +400,23 @@ public class UserQueryService {
 \end{lstlisting}
 \end{frame}
 
+
 % ================== Section: Event-Driven =====================
-\section{Event-Driven Styles}
-\begin{frame}{事件驅動三風格}
-    \begin{enumerate}
-        \item Pipes \& Filters — 流式轉換
-        \item Sagas — 分散式交易協調 + 補償
-        \item Event Sourcing — 狀態 = 事件折疊
-    \end{enumerate}
+% ================== Section: Event-Driven =====================
+\section{Event-Driven Architecture}
+\begin{frame}{事件驅動架構}
+    \begin{itemize}
+        \item 服務間透過事件進行非同步通訊
+        \item 鬆耦合、高擴展性、最終一致性
+        \item 可結合事件溯源（Event Sourcing）模式
+    \end{itemize}
+    \begin{center}
+        \includegraphics[width=0.7\textwidth]{img/event-driven-hex.png}
+    \end{center}
 \end{frame}
 
 \begin{frame}[fragile]{Saga 編排範例}
-    \begin{lstlisting}[language=Java]
+\begin{lstlisting}[language=Java]
 class ShippingSaga {
     @SagaEventHandler
     void on(OrderCreated e) {
@@ -298,8 +435,19 @@ class ShippingSaga {
 \end{lstlisting}
 \end{frame}
 
-\begin{frame}[fragile]{Event Sourcing 範例}
-    \begin{lstlisting}[language=Java]
+\begin{frame}{事件溯源模式}
+  \begin{itemize}
+    \item 將 Aggregate 的每次狀態變更以事件持久化 (Append-Only)
+    \item 可重播事件重建任何時間點狀態，支援審計與時間旅行
+    \item 常與 CQRS / Saga 搭配使用
+  \end{itemize}
+  \begin{center}
+    \includegraphics[width=0.7\textwidth]{img/event-sourcing-pipeline.png}
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Event Sourcing Java 範例}
+\begin{lstlisting}[language=Java]
 public interface DomainEvent { Instant occurredAt(); }
 
 public record OrderCreated(String id, Instant occurredAt) implements DomainEvent {}
