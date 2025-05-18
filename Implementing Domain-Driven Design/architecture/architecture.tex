@@ -293,25 +293,25 @@ public class ProductResource extends Resource {
     \begin{itemize}
         \item 先編寫明確的介面定義（「合約」），再實作服務程式碼
         \item 合約成為單一事實來源：
-        \begin{itemize}
-            \item \textbf{Provider}：依照合約生成或手寫服務端程式碼
-            \item \textbf{Consumer}：生成存根/SDK 或用於驗證與模擬
-            \item \textbf{Governance}：版本控制、相容性檢查、策略執行、文件
-        \end{itemize}
+              \begin{itemize}
+                  \item \textbf{Provider}：依照合約生成或手寫服務端程式碼
+                  \item \textbf{Consumer}：生成存根/SDK 或用於驗證與模擬
+                  \item \textbf{Governance}：版本控制、相容性檢查、策略執行、文件
+              \end{itemize}
     \end{itemize}
     \tiny
     \begin{center}
         \begin{tabular}{|l|l|l|}
             \hline
-            \textbf{協定} & \textbf{合約格式} & \textbf{程式碼生成工具} \\
+            \textbf{協定} & \textbf{合約格式}         & \textbf{程式碼生成工具}                  \\
             \hline
-            REST/HTTP & OpenAPI 3 / AsyncAPI & Swagger Codegen, openapi-generator \\
+            REST/HTTP     & OpenAPI 3 / AsyncAPI      & Swagger Codegen, openapi-generator       \\
             \hline
-            gRPC & Protocol Buffers (.proto) & protoc, Buf, Grpc-Tools \\
+            gRPC          & Protocol Buffers (.proto) & protoc, Buf, Grpc-Tools                  \\
             \hline
-            SOAP & WSDL + XSD & wsimport, wsdl2java \\
+            SOAP          & WSDL + XSD                & wsimport, wsdl2java                      \\
             \hline
-            Events & Avro Schema, AsyncAPI & avro-tools, Karate, Springs Cloud Stream \\
+            Events        & Avro Schema, AsyncAPI     & avro-tools, Karate, Springs Cloud Stream \\
             \hline
         \end{tabular}
     \end{center}
@@ -321,15 +321,15 @@ public class ProductResource extends Resource {
     \begin{center}
         \begin{tabular}{|p{0.45\textwidth}|p{0.45\textwidth}|}
             \hline
-            \textbf{Code-First（實作優先）} & \textbf{Contract-First（合約優先）} \\
+            \textbf{Code-First（實作優先）}              & \textbf{Contract-First（合約優先）}      \\
             \hline
-            API 常模仿內部類別結構；後續重構會破壞客戶端 & API 專為外部需求設計；與內部模型解耦 \\
+            API 常模仿內部類別結構；後續重構會破壞客戶端 & API 專為外部需求設計；與內部模型解耦     \\
             \hline
-            客戶端團隊需等待服務端存根或模擬服務 & 合約早期發布 → 客戶端和服務端可並行工作 \\
+            客戶端團隊需等待服務端存根或模擬服務         & 合約早期發布 → 客戶端和服務端可並行工作  \\
             \hline
-            更難追蹤破壞性變更 & 可比較合約差異，執行語義版本檢查 \\
+            更難追蹤破壞性變更                           & 可比較合約差異，執行語義版本檢查         \\
             \hline
-            較少保證；文件容易過時 & 程式碼、測試、文件、模擬都從單一來源生成 \\
+            較少保證；文件容易過時                       & 程式碼、測試、文件、模擬都從單一來源生成 \\
             \hline
         \end{tabular}
     \end{center}
@@ -359,18 +359,18 @@ class OrderController {
 % ================== Section: CQRS =====================
 \section{CQRS Pattern}
 \begin{frame}{CQRS 核心概念}
-  \begin{itemize}
-    \item Command ↔ Query 完全分離；寫入模型 (Write Model) 不直接用於查詢
-    \item 寫入優先強一致；讀取可為最終一致並為效能/報表優化
-    \item 常配 Event Sourcing；需要處理同步/異步投影更新
-  \end{itemize}
-  \begin{center}
-    \includegraphics[width=0.9\textwidth]{img/cqrs-diagram.png}
-  \end{center}
+    \begin{itemize}
+        \item Command ↔ Query 完全分離；寫入模型 (Write Model) 不直接用於查詢
+        \item 寫入優先強一致；讀取可為最終一致並為效能/報表優化
+        \item 常配 Event Sourcing；需要處理同步/異步投影更新
+    \end{itemize}
+    \begin{center}
+        \includegraphics[width=0.9\textwidth]{img/cqrs-diagram.png}
+    \end{center}
 \end{frame}
 
 \begin{frame}[fragile]{CQRS Java — Command Side}
-\begin{lstlisting}[language=Java]
+    \begin{lstlisting}[language=Java]
 public record CreateUserCommand(String id, String name) {}
 
 public class UserCommandHandler {
@@ -384,7 +384,7 @@ public class UserCommandHandler {
 \end{frame}
 
 \begin{frame}[fragile]{CQRS Java — Query Side}
-\begin{lstlisting}[language=Java]
+    \begin{lstlisting}[language=Java]
 public class UserProjection {
     @EventListener
     public void on(UserCreated e) {
@@ -416,7 +416,7 @@ public class UserQueryService {
 \end{frame}
 
 \begin{frame}[fragile]{Saga 編排範例}
-\begin{lstlisting}[language=Java]
+    \begin{lstlisting}[language=Java]
 class ShippingSaga {
     @SagaEventHandler
     void on(OrderCreated e) {
@@ -436,18 +436,18 @@ class ShippingSaga {
 \end{frame}
 
 \begin{frame}{事件溯源模式}
-  \begin{itemize}
-    \item 將 Aggregate 的每次狀態變更以事件持久化 (Append-Only)
-    \item 可重播事件重建任何時間點狀態，支援審計與時間旅行
-    \item 常與 CQRS / Saga 搭配使用
-  \end{itemize}
-  \begin{center}
-    \includegraphics[width=0.7\textwidth]{img/event-sourcing-pipeline.png}
-  \end{center}
+    \begin{itemize}
+        \item 將 Aggregate 的每次狀態變更以事件持久化 (Append-Only)
+        \item 可重播事件重建任何時間點狀態，支援審計與時間旅行
+        \item 常與 CQRS / Saga 搭配使用
+    \end{itemize}
+    \begin{center}
+        \includegraphics[width=0.7\textwidth]{img/event-sourcing-pipeline.png}
+    \end{center}
 \end{frame}
 
 \begin{frame}[fragile]{Event Sourcing Java 範例}
-\begin{lstlisting}[language=Java]
+    \begin{lstlisting}[language=Java]
 public interface DomainEvent { Instant occurredAt(); }
 
 public record OrderCreated(String id, Instant occurredAt) implements DomainEvent {}
@@ -473,74 +473,93 @@ public class OrderAggregate {
 
 % ================== Section: Data Fabric =====================
 \section{Data Fabric}
-\begin{frame}{Data Fabric 架構要點}
+
+%--- 架構要點 ---------------------------------
+\begin{frame}{Data Fabric 架構重點}
     \begin{itemize}
-        \item 統一資料平面：整合 OLTP / OLAP / Streams / Cache
-        \item Smart Cache、Federated Query、Consistency Policy、Observability
-        \item 與 DDD 聚合分片結合，確保資料局部性與效能
+        \item \textbf{統一數據平面}——同時支援 OLTP、OLAP、串流、快取等多種工作負載。
+        \item 內建：智慧快取、聯邦查詢、一致性政策、可觀察性等能力。
+        \item 分片設計建議與 DDD Aggregate 對齊，以提升資料本地性與處理效能。
     \end{itemize}
 \end{frame}
 
-\begin{frame}[fragile]{Hazelcast 快取範例}
+%--- Hazelcast 範例 ---------------------------------------
+\begin{frame}[fragile]{Hazelcast——記憶體快取範例}
     \begin{lstlisting}[language=Java]
 Config cfg = new Config();
 HazelcastInstance hz = Hazelcast.newHazelcastInstance(cfg);
+
 IMap<String, OrderSummary> orders = hz.getMap("orders");
 
-OrderSummary summary = new OrderSummary("ID-123", 1023, Instant.now());
-orders.set(summary.id(), summary, 30, TimeUnit.MINUTES);
+// 帶 TTL 寫入快取
+OrderSummary summary =
+    new OrderSummary("ID-123", 1023, Instant.now());
+orders.set(summary.id(), summary,
+           30, TimeUnit.MINUTES);
 
-Collection<OrderSummary> highValue = orders.values(
-    Predicates.greaterThan("total", 1000));
-\end{lstlisting}
+// 條件式快取查詢
+Collection<OrderSummary> highValue =
+    orders.values(Predicates.greaterThan("total", 1_000));
+  \end{lstlisting}
 \end{frame}
 
-\begin{frame}[fragile]{Apache Ignite 分散運算範例}
+%--- Ignite 分散式運算範例 ----------------------------------
+\begin{frame}[fragile]{Apache Ignite——分散式運算範例}
     \begin{lstlisting}[language=Java]
-Ignition.start();
-Ignite ignite = Ignition.ignite();
-IgniteCache<Integer, Tick> cache = ignite.getOrCreateCache("ticks");
+Ignite ignite = Ignition.start();
+IgniteCache<Integer, Tick> cache =
+    ignite.getOrCreateCache("ticks");
 
-IgniteCallable<Double> task = () -> {
+IgniteCallable<Double> valueAtRisk = () -> {
     List<List<?>> rows = cache.query(
-      new SqlFieldsQuery("SELECT price FROM Tick WHERE pid = ?")
-        .setArgs(portfolioId)).getAll();
+        new SqlFieldsQuery(
+            "SELECT price FROM Tick WHERE pid=?")
+            .setArgs(portfolioId)
+    ).getAll();
+
     List<Double> prices = rows.stream()
         .map(r -> (Double) r.get(0))
         .sorted()
-        .collect(Collectors.toList());
-    return prices.get((int)(prices.size() * 0.05)); // Value-at-Risk
+        .toList();
+
+    // 計算 5% Value-at-Risk
+    return prices.get((int) (prices.size() * 0.05));
 };
 
-Double var = ignite.compute().call(task);
-\end{lstlisting}
+Double var =
+    ignite.compute().call(valueAtRisk);
+  \end{lstlisting}
 \end{frame}
 
-\begin{frame}{Data Fabric 風險與治理建議}
+%--- 風險與治理 ---------------------------------------
+\begin{frame}{Data Fabric——風險與治理}
     \begin{itemize}
-        \item \textbf{記憶體壓力}：熱資料量估錯 → OOM，建議 TTL + LRU Eviction
-        \item \textbf{Schema 演進}：需有 Registry + 相容性驗證
-        \item \textbf{Split-Brain}：多區部署需啟用 CP 模式或資料同步機制
-        \item \textbf{安全}：敏感資料須加密（靜態/傳輸/使用中）與審計紀錄
+        \item \textbf{記憶體壓力}——高估熱資料集，恐導致 OOM；需加強 TTL 或 LRU 機制。
+        \item \textbf{結構演進}——應採用 Schema Registry 並驗證相容性。
+        \item \textbf{腦裂問題}——多區集群建議啟用 CP 模式或跨站複寫。
+        \item \textbf{安全性}——敏感數據需加密（靜態、傳輸、運算中）並啟用稽核功能。
     \end{itemize}
 \end{frame}
 
 % ================== 結語 =====================
 \section{結語}
-\begin{frame}{結語：架構即演進}
+\begin{frame}{結語}
     \begin{itemize}
-        \item 沒有銀彈架構，DDD 幫助你因應變化、協作清晰
-        \item 每種架構風格皆服務於 Domain 模型的演進
-        \item 避免技術導向的「錯配式設計」；堅持語言一致性與 Context 純度
-        \item 架構設計的重點不是「選哪一種」，而是「如何隨著需求演進」
+        \item DDD 提供語意邊界，Hexagonal 讓依賴指向核心
+        \item SOA / EDA / Saga 以事件串聯跨 Context 協作
+        \item Event Sourcing + CQRS 帶來可追溯與高效查詢，需留意最終一致
+        \item Data Fabric 為超大流量系統提供彈性快取與分散運算
+        \item 選擇模式\textbf{$\neq$}潮流跟風：\textbf{從業務痛點出發，按需增量演進}
     \end{itemize}
+    \vspace{1em}
+    \centering{\Large \textit{"Architecture is about the important stuff…" \small – \textbf{Ralph Johnson}}}
 \end{frame}
 
 \begin{frame}[plain,noframenumbering]
     \centering
     \Huge \textbf{謝謝收看！} \\
     \vspace{1cm}
-    \normalsize Slides by
+    \normalsize Slides by \textbf{Zhima Mochi}
 \end{frame}
 
 \end{document}
