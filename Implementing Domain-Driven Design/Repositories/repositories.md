@@ -60,7 +60,7 @@ tenant.RegisterUser("jane@example.com")
 uow.Commit()
 ```
 
-Frameworks detect dirty objects—common in Java and .NET, rare in Go. Collection-oriented repositories depend on change-tracking plus the surrounding Unit of Work to spot those updates. If Go ever had an ORM with state tracking, this is the model it would follow.
+Frameworks detect dirty objects—common in Java and .NET. Go’s popular libraries, such as GORM, follow an Active Record style that still expects explicit persistence calls, so transparent change tracking is uncommon. Collection-oriented repositories depend on change-tracking plus the surrounding Unit of Work to spot those updates. If Go ever embraced a mainstream change-tracking ORM, this is the model it would follow.
 
 ### 3.2 Persistence-Oriented
 
@@ -262,7 +262,7 @@ Keep query operations scoped to aggregate identity or other local keys. Broader,
 
 ## 13. Why It Matters to Go Developers
 
-Go lacks an ORM with implicit state tracking, so boundaries must be explicitly designed. DDD repositories isolate business logic from data access.
+Go lacks a mainstream ORM with implicit state tracking—tools like GORM still rely on explicit `Save` calls—so boundaries must be explicitly designed. DDD repositories isolate business logic from data access.
 
 By following Vernon’s approach, your Go services become clearer, more testable, and better aligned with real business concepts rather than just database schemas.
 

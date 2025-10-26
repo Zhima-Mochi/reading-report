@@ -103,6 +103,7 @@ type TenantRepository interface {
     \item Mimics an in-memory collection; Unit of Work tracks changes automatically.
     \item Common in ecosystems with rich ORMs (Java, .NET).
     \item Works best when the tooling offers change tracking and implicit transactions.
+    \item Go libraries such as GORM follow an Active Record pattern, so transparent change tracking remains uncommon.
     \item Less common in Go, but useful to understand when collaborating across stacks.
   \end{itemize}
 \end{frame}
