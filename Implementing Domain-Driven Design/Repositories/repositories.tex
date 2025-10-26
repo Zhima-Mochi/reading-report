@@ -1,0 +1,242 @@
+% =====================================================
+%  Repositories Slide Deck
+% =====================================================
+\documentclass{beamer}
+\usetheme{Madrid}
+
+% ----------- Packages ----------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\hypersetup{colorlinks,linkcolor=black,urlcolor=blue}
+
+\usepackage{pgfpages}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\setbeameroption{show notes}
+
+% ----------- Layout ----------
+
+\AtBeginSection[]{
+  \begin{frame}
+    \vfill
+    \begin{center}
+        \usebeamercolor{title}
+        {\Huge \insertsection}
+    \end{center}
+    \vfill
+  \end{frame}
+}
+
+
+% ----------- Code Listing Style ----------
+\lstset{
+  language=Go,
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\bfseries\color{blue},
+  commentstyle=\itshape\color{gray},
+  stringstyle=\color{purple},
+  numbers=left, numberstyle=\tiny\color{gray}, numbersep=5pt,
+  breaklines=true, showstringspaces=false,
+  columns=flexible, tabsize=2,
+  frame=single, framerule=0pt,
+  backgroundcolor=\color{gray!6}
+}
+\title{Repositories in Domain-Driven Design}
+\subtitle{Bridging Domain and Persistence in Go}
+\author{}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Agenda}
+  \tableofcontents
+\end{frame}
+
+\section{Why Repositories}
+
+\begin{frame}{Bridging Domain and Data}
+  \begin{itemize}
+    \item Repositories mediate between domain objects and persistence, keeping the domain clean.
+    \item They give the illusion of an in-memory collection while data lives in durable storage.
+    \item Interfaces belong in the domain layer; infrastructure implements them behind the scenes.
+    \item Promote expressive domain code such as \texttt{tenant.Activate()} without leaking database concerns.
+  \end{itemize}
+\end{frame}
+
+\section{Definition and Placement}
+
+\begin{frame}{Evans \& Vernon on Repositories}
+  \begin{itemize}
+    \item Evans: “A Repository mediates between the domain and data-mapping layers, giving the illusion of an in-memory collection.”
+    \item Vernon reinforces the concept: expose repositories only for aggregate roots.
+    \item Deliver domain objects in and out; hide records, SQL, and driver specifics.
+    \item Domain layer relies on a stable contract; implementations can change via infrastructure adapters.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Repository Interface in Go}
+  \begin{lstlisting}
+type TenantRepository interface {
+    Add(ctx context.Context, tenant *Tenant) error
+    ByID(ctx context.Context, id TenantID) (*Tenant, error)
+    Remove(ctx context.Context, id TenantID) error
+}
+  \end{lstlisting}
+  \begin{itemize}
+    \item Methods reflect aggregate lifecycle operations rather than CRUD verbs alone.
+    \item Keeps invariants within the aggregate while infrastructure handles serialization.
+  \end{itemize}
+\end{frame}
+
+\section{Repository Styles}
+
+\begin{frame}{Collection-Oriented Style}
+  \begin{itemize}
+    \item Mimics an in-memory collection; Unit of Work tracks changes automatically.
+    \item Common in ecosystems with rich ORMs (Java, .NET).
+    \item Works best when the tooling offers change tracking and implicit transactions.
+    \item Less common in Go, but useful to understand when collaborating across stacks.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Persistence-Oriented Style}
+  \begin{lstlisting}
+type TenantRepository interface {
+    Save(ctx context.Context, tenant *Tenant) error
+    Delete(ctx context.Context, id TenantID) error
+    ByID(ctx context.Context, id TenantID) (*Tenant, error)
+}
+  \end{lstlisting}
+  \begin{itemize}
+    \item Dominant approach in Go: explicit reads and writes per call.
+    \item No hidden Unit of Work—callers orchestrate state changes intentionally.
+    \item Encourages clarity about I/O and transaction boundaries.
+  \end{itemize}
+\end{frame}
+
+\section{Aggregate Example}
+
+\begin{frame}[fragile]{Tenant Aggregate Governing Users}
+  \begin{lstlisting}
+type Tenant struct {
+    ID       TenantID
+    Name     string
+    IsActive bool
+    Users    []*User
+}
+
+func (t *Tenant) Activate() { t.IsActive = true }
+
+func (t *Tenant) RegisterUser(email string) *User {
+    user := &User{Email: email, TenantID: t.ID}
+    t.Users = append(t.Users, user)
+    return user
+}
+  \end{lstlisting}
+  \begin{itemize}
+    \item Tenant acts as aggregate root, enforcing invariants for contained users.
+    \item User data reaches persistence only through the tenant repository.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Application Service Coordinates Persistence}
+  \begin{lstlisting}
+func (s *TenantService) ActivateTenant(ctx context.Context, id TenantID) error {
+    tenant, err := s.repo.ByID(ctx, id)
+    if err != nil {
+        return err
+    }
+    tenant.Activate()
+    return s.repo.Save(ctx, tenant)
+}
+  \end{lstlisting}
+  \begin{itemize}
+    \item Application layer owns transaction scope and orchestration.
+    \item Repository remains focused on persisting aggregate state.
+  \end{itemize}
+\end{frame}
+
+\section{DAO vs Repository}
+
+\begin{frame}{Comparing DAO and Repository}
+  \begin{tabular}{p{0.3\linewidth}p{0.3\linewidth}p{0.3\linewidth}}
+    \textbf{Aspect} & \textbf{DAO} & \textbf{Repository} \\
+    \hline
+    Focus & Tables / records & Aggregates / roots \\
+    Returns & DTOs or raw rows & Domain objects \\
+    Layer & Infrastructure & Domain interface, infra implementation \\
+    Concern & CRUD mechanics & Aggregate lifecycle \& invariants \\
+  \end{tabular}
+  \vspace{0.5em}
+  \begin{itemize}
+    \item Both can coexist: DAO encapsulates data access, repository composes domain-facing contract.
+    \item Keeps the domain shielded from persistence technology churn.
+  \end{itemize}
+\end{frame}
+
+\section{Design Guidance}
+
+\begin{frame}{When to Use a Repository}
+  \begin{itemize}
+    \item Provide one repository per aggregate root; avoid exposing internal entities.
+    \item Shape methods around domain language—\textit{ActivateTenant}, \textit{RegisterUser}, etc.
+    \item Let repositories persist lifecycles; avoid mixing analytics or logging concerns.
+    \item For cross-aggregate projections, create dedicated read models or query services.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Queries and Consistency}
+  \begin{itemize}
+    \item Scope repository queries to identifiers or local keys within the aggregate boundary.
+    \item Use query services/read models for reporting or multi-aggregate searches.
+    \item Embrace CQRS-style separation when projections must remain eventually consistent.
+    \item Keeps write-model repositories lean and focused on invariants.
+  \end{itemize}
+\end{frame}
+
+\section{Testing Strategies}
+
+\begin{frame}[fragile]{Testing Repository Contracts}
+  \begin{lstlisting}
+type InMemoryTenantRepo struct {
+    store map[TenantID]*Tenant
+}
+
+func (r *InMemoryTenantRepo) Save(ctx context.Context, t *Tenant) error {
+    cp := *t
+    r.store[t.ID] = &cp
+    return nil
+}
+
+func (r *InMemoryTenantRepo) ByID(ctx context.Context, id TenantID) (*Tenant, error) {
+    return r.store[id], nil
+}
+  \end{lstlisting}
+  \begin{itemize}
+    \item In-memory fakes accelerate unit tests and validate domain logic.
+    \item Integration tests with the real database prove mapping fidelity.
+    \item Watch for aliasing or shared references in fakes to avoid optimistic tests.
+  \end{itemize}
+\end{frame}
+
+\section{Key Takeaways}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item Repositories bridge domain behavior and persistence without leaking infrastructure.
+    \item Prefer explicit, persistence-oriented methods in Go; know when collection-style applies.
+    \item Keep repository interfaces small, aggregate-focused, and transaction-free.
+    \item Separate read models for projections; test with both in-memory and database-backed implementations.
+    \item A well-crafted repository sustains the domain between requests—not merely a CRUD wrapper.
+  \end{itemize}
+\end{frame}
+
+\end{document}
